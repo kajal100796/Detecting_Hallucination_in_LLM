@@ -27,6 +27,6 @@ def run_pipeline():
         except Exception as e:
             print(f"Error processing {pdf}: {e}")
 
-# Fixed the syntax here: Double underscores are required
+
 if __name__ == "__main__":
     run_pipeline()
