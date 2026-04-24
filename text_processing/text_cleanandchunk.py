@@ -7,7 +7,7 @@ import re
 
 def clean_text(text):
     """Removing messy whitespaces."""
-    text = re.sub(r'\s+', ' ', text) # Merge multiple spaces/newlines
+    text = re.sub(r'\s+', ' ', text) 
     return text.strip()
 
 def chunk_text(text, max_chars=1000, overlap=200):
