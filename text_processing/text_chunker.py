@@ -36,7 +36,7 @@ def chunk_text(text, max_chars=500, overlap=50):
     return chunks
 
 if __name__ == "__main__":
-    # Your sample test that produced the screenshot
+    
     sample_text = "This is a sample text " * 100 
     results = chunk_text(sample_text)
     print(f"Total chunks: {len(results)}")
