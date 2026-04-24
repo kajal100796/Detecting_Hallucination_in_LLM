@@ -6,12 +6,12 @@ Purpose: Extract text from PDF files
 import re
 
 def clean_text(text):
-    """Removes messy whitespaces and noise."""
+    """Removing messy whitespaces."""
     text = re.sub(r'\s+', ' ', text) # Merge multiple spaces/newlines
     return text.strip()
 
-def chunk_text(text, max_chars=1500, overlap=200):
-    """Slices text into large 1500-char blocks with overlap."""
+def chunk_text(text, max_chars=1000, overlap=200):
+    """Slicing text into large 1000-char blocks with overlap."""
     cleaned = clean_text(text)
     chunks = []
     current_pos = 0
@@ -22,7 +22,7 @@ def chunk_text(text, max_chars=1500, overlap=200):
         # Grab the chunk
         chunk = cleaned[current_pos:end_pos]
         
-        # Try to find a logical break (period or space) so we don't cut a word
+        # finding a logical break
         if end_pos < len(cleaned):
             last_space = chunk.rfind(" ")
             if last_space != -1:
