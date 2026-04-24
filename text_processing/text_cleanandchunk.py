@@ -17,7 +17,7 @@ def chunk_text(text, max_chars=1000, overlap=200):
     chunks = []
     start = 0
     
-    # Step 2: The "Moving Window" Loop
+    #The "Moving Window" Loop
     while start < len(text):
         end = start + max_chars
         chunk = text[start:end]
