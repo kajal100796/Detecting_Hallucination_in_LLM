@@ -1,64 +1,51 @@
-import torch
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
-
-# Load the model and tokenizer
-model_id = "google/flan-t5-small"
-tokenizer = AutoTokenizer.from_pretrained(model_id)
-model = AutoModelForSeq2SeqLM.from_pretrained(model_id)
+import requests
+import json
 
 def generate_answer(question, context):
     """
-    Generates an answer with strict extraction instructions to 
-    prevent the model from missing data at the bottom of the context.
+    Sends a request to the local Ollama server to generate a grounded answer.
+    If the context is missing information, it returns a technical refusal.
     """
-    # IMPROVED PROMPT: Using 'Background:' and 'Question:' helps T5 focus.
-    # We explicitly tell it to look at the WHOLE text.
-    prompt = (
-    f"Background: {context}\n\n"
-    f"Task: Using ONLY the labels provided in the Background, answer the question. "
-    f"Do not use outside knowledge. If the answer is not a direct word-for-word match, say 'I do not know'.\n\n"
-    f"Question: {question}\n"
-    f"Answer:"
-)
+    url = "http://localhost:11434/api/generate"
     
+    # We define a strict prompt to ensure the model doesn't over-explain
+    prompt = (
+        f"Context: {context}\n\n"
+        f"Task: Using the provided context, answer the question accurately. "
+        f"Be concise. If the specific information is not present in the context, "
+        f"reply with exactly: 'Insufficient context for grounding'.\n\n"
+        f"Question: {question}\n"
+        f"Answer:"
+    )
+
+    data = {
+        "model": "llama3", 
+        "prompt": prompt,
+        "stream": False     # Set to False to get the full response at once
+    }
+
     try:
-        # Tokenize the input
-        inputs = tokenizer(prompt, return_tensors="pt", truncation=True)
+        # Send request to Ollama local server
+        response = requests.post(url, json=data)
+        response.raise_for_status()
+        result = response.json()
+        
+        # Extract response text
+        answer = result.get("response", "").strip()
 
-        with torch.no_grad():
-            output_tokens = model.generate(
-                **inputs, 
-                max_new_tokens=30,     # Slightly increased to allow for full phrase extraction
-                do_sample=False,        # Stay deterministic
-                num_beams=4,            # Increased beams to help find the best path in long context
-                no_repeat_ngram_size=2
-            )
+        # Artifact Cleaning (Removing structural noise)
+        answer = answer.replace("Answer:", "").replace("Question:", "").strip()
 
-        # Decode the answer
-        answer = tokenizer.decode(output_tokens[0], skip_special_tokens=True)
+        # --- TECHNICAL GROUNDING CHECK ---
+        # If the model gives an empty string or a generic refusal, use your technical term
+        refusal_triggers = ["i do not know", "not mentioned", "not found", "i'm sorry"]
         
-        # --- ARTIFACT CLEANING ---
-        # Removes common Flan-T5 glitches like (i), (ii), or repeating the question
-        junk_list = ["(ii)", "(i)", "(iii)", "Answer:", "Question:", "Background:"]
-        for junk in junk_list:
-            answer = answer.replace(junk, "")
-        
-        answer = answer.strip()
-
-        # --- DATA EXTRACTION LOGIC ---
-        # If the model gives a list, we take the first few relevant parts.
-        if "," in answer:
-            parts = answer.split(',')
-            if len(parts) >= 2:
-                # Joining only the first two items keeps the UI clean for Ayushi
-                answer = f"{parts[0].strip()}, {parts[1].strip()}"
-        
-        # FINAL GUARDRAIL:
-        # If the model gives a 1-2 word answer that is just punctuation, or is empty
-        if len(answer) < 2 or answer.lower() in ["none", "n/a"]:
-            return "I do not know"
-        
+        if not answer or any(trigger in answer.lower() for trigger in refusal_triggers):
+            return "Insufficient context for grounding"
+            
         return answer
 
+    except requests.exceptions.ConnectionError:
+        return "Error: Ollama is not running. Please start Ollama and run 'ollama run llama3'."
     except Exception as e:
         return f"Error during generation: {e}"
