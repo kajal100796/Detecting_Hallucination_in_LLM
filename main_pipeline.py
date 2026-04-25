@@ -1,9 +1,14 @@
 import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from pdf_processing.test_loader_extractor import extract_text_from_pdf
 from text_processing.text_cleanandchunk import chunk_text
 from embeddings.embedder import Embedder
 from vector_store.faiss_store import FAISSStore
 from Retrieval.Retriever import retrieve
+from LLM.generator import generate_answer   # ✅ FIXED (lowercase)
 
 def run_pipeline():
     print("=== STEP 1 & 2: PDF HANDLING & EXTRACTION ===")
@@ -30,7 +35,6 @@ def run_pipeline():
     embeddings = embedder.embed_chunks(final_chunks)
 
     print("\n=== STEP 6: VECTOR DATABASE (FAISS) ===")
-    # 'all-MiniLM-L6-v2' outputs 384-dimensional vectors
     vector_store = FAISSStore(embedding_dim=384)
     vector_store.add_embeddings(embeddings, final_chunks)
 
@@ -39,9 +43,18 @@ def run_pipeline():
     
     print("\n=== OUTPUT: RELEVANT CHUNKS ===")
     top_chunks = retrieve(user_question, vector_store.index, final_chunks, top_k=3)
+
+    # ✅ FIX: KEEP INSIDE FUNCTION
+    context = " ".join(top_chunks)
+
+    print("\n=== STEP 8: LLM ANSWER GENERATION ===")
+    final_answer = generate_answer(user_question, context)
+
+    print("\n=== FINAL ANSWER ===")
+    print(final_answer)
     
+
     print("\n--- TOP RESULTS ---")
-    # Using a set to avoid printing duplicate chunks if FAISS returns duplicates for a tiny document
     seen = set()
     result_num = 1
     for chunk in top_chunks:
@@ -52,6 +65,7 @@ def run_pipeline():
             print("-" * 60)
             seen.add(chunk)
             result_num += 1
+
 
 if __name__ == "__main__":
     run_pipeline()
