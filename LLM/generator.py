@@ -1,51 +1,48 @@
-import requests
-import json
+from groq import Groq
+from dotenv import load_dotenv
+import os
+
+# Load environment variables
+load_dotenv()
+
+# Initialize client safely
+api_key = os.getenv("GROQ_API_KEY")
+
+if not api_key:
+    raise ValueError("GROQ_API_KEY not found. Please set it in your .env file.")
+
+client = Groq(api_key=api_key)
+
 
 def generate_answer(question, context):
-    """
-    Sends a request to the local Ollama server to generate a grounded answer.
-    If the context is missing information, it returns a technical refusal.
-    """
-    url = "http://localhost:11434/api/generate"
-    
-    # We define a strict prompt to ensure the model doesn't over-explain
-    prompt = (
-        f"Context: {context}\n\n"
-        f"Task: Using the provided context, answer the question accurately. "
-        f"Be concise. If the specific information is not present in the context, "
-        f"reply with exactly: 'Insufficient context for grounding'.\n\n"
-        f"Question: {question}\n"
-        f"Answer:"
-    )
+    full_prompt = f"""
+You are an assistant for document analysis.
 
-    data = {
-        "model": "llama3", 
-        "prompt": prompt,
-        "stream": False     # Set to False to get the full response at once
-    }
+Rules:
+- Answer ONLY from the given context
+- Do NOT make up information
+- If answer is not in context, say "Grounding Failure"
+
+Context:
+{context}
+
+Question:
+{question}
+
+Answer:
+"""
 
     try:
-        # Send request to Ollama local server
-        response = requests.post(url, json=data)
-        response.raise_for_status()
-        result = response.json()
-        
-        # Extract response text
-        answer = result.get("response", "").strip()
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "user", "content": full_prompt}
+            ],
+            temperature=0.3,
+            max_tokens=200
+        )
 
-        # Artifact Cleaning (Removing structural noise)
-        answer = answer.replace("Answer:", "").replace("Question:", "").strip()
+        return response.choices[0].message.content.strip()
 
-        # --- TECHNICAL GROUNDING CHECK ---
-        # If the model gives an empty string or a generic refusal, use your technical term
-        refusal_triggers = ["i do not know", "not mentioned", "not found", "i'm sorry"]
-        
-        if not answer or any(trigger in answer.lower() for trigger in refusal_triggers):
-            return "Insufficient context for grounding"
-            
-        return answer
-
-    except requests.exceptions.ConnectionError:
-        return "Error: Ollama is not running. Please start Ollama and run 'ollama run llama3'."
     except Exception as e:
-        return f"Error during generation: {e}"
+        return f"Error: {str(e)}"
