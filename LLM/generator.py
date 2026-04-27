@@ -5,23 +5,27 @@ import os
 # Load environment variables
 load_dotenv()
 
-# Initialize client safely
-api_key = os.getenv("GROQ_API_KEY")
-
-if not api_key:
-    raise ValueError("GROQ_API_KEY not found. Please set it in your .env file.")
-
-client = Groq(api_key=api_key)
+# Initialize Groq client
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
 def generate_answer(question, context):
-    full_prompt = f"""
-You are an assistant for document analysis.
+    """
+    Returns ONLY a direct, concise answer
+    """
+
+    prompt = f"""
+You are an AI assistant in a RAG system.
+
+Answer the question using the given context.
 
 Rules:
-- Answer ONLY from the given context
-- Do NOT make up information
-- If answer is not in context, say "Grounding Failure"
+- Give ONLY the direct answer
+- Be concise and precise (2–4 lines max)
+- Do NOT explain unless necessary
+- Do NOT add headings or bullet points
+- Do NOT say "based on context"
+- Do NOT hallucinate
 
 Context:
 {context}
@@ -34,15 +38,25 @@ Answer:
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="llama-3.3-70b-versatile",
             messages=[
-                {"role": "user", "content": full_prompt}
+                {"role": "system", "content": "You give short, precise answers."},
+                {"role": "user", "content": prompt}
             ],
-            temperature=0.3,
-            max_tokens=200
+            temperature=0.2,   # lower = more direct
+            max_tokens=150
         )
 
-        return response.choices[0].message.content.strip()
+        answer = response.choices[0].message.content.strip()
+
+        # Clean formatting
+        answer = answer.replace("Answer:", "").strip()
+
+        # Fallback
+        if not answer or len(answer) < 5:
+            return "Insufficient context for grounding"
+
+        return answer
 
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error during generation: {str(e)}"
